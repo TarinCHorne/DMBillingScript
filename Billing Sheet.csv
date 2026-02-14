@@ -1,0 +1,4 @@
+Player,Email,Bill Y/N,Pay period M/W/B,GM/day of week,Prepaid Credits,Last Bill sent,Notes
+Example1,testing1@gmail.com,Y,M,"Ann W, Ann Th",0,12-01-2025,
+Example2,testing2@hotmail.com,Y,W,"Ann Tu, Ann Tu, Ann M",3,12-01-2025,Pays for two players on Tuesday
+Example3,testing3@outlook.com,Y,B,"Ann Sa, Ann Su",0,12-01-2025,
