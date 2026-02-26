@@ -272,7 +272,7 @@ def weekday_date_list(start, end, weekday, pay_frequency):
     else:
         for i in range((end_date - start_date).days):
             day = calendar.day_name[(start_date + timedelta(days=i+1)).weekday()]
-            if(weekday == day): date_list.append((start_date + timedelta(days=i+1) - timedelta(weeks=1)).strftime(DATE_FORMAT))
+            if(weekday == day): date_list.append((start_date + timedelta(days=i+1)).strftime(DATE_FORMAT))
     return date_list
 
 def run_billing():
