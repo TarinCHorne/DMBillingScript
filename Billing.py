@@ -128,7 +128,6 @@ def count_weekdays_between_two_dates(start, end, frequency = 1, offset = 0):
 def calculate_next_billing_date(last, pay_frequancy):
     last_date = datetime.strptime(last, DATE_FORMAT)
     last_week_start = week_start = last_date - timedelta(days=last_date.weekday())
-    todays_date = round_datetime_to_day(datetime.today())
     if pay_frequancy == 'B':
         #Biweekely
         return (last_week_start + timedelta(days=14))
