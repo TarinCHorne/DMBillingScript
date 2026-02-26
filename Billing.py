@@ -22,10 +22,17 @@ IS_PAY_AHEAD = True
 DEBUG = False
 
 #PP API Config
+#PP API Config
 ENABLE_PP_API = False
-MERCHANT_EMAIL = "********"
-CLIENT_ID = "**********"
-SECRET = "**********"
+IS_SANDBOX = True
+#Sandbox
+SANDBOX_MERCHANT_EMAIL = "********"
+SANDBOX_CLIENT_ID = "********"
+SANDBOX_SECRET = "********"
+#Live
+LIVE_MERCHANT_EMAIL = "********"
+LIVE_CLIENT_ID = "********"
+LIVE_SECRET = "********"
 PP_TERMS_AND_CONDITIONS = """
 Terms and conditions go here.
 """
@@ -128,11 +135,9 @@ def calculate_next_billing_date(last, pay_frequancy):
     elif pay_frequancy == 'M':
         #Monthly
         first_of_month = round_datetime_to_day(datetime.today()).replace(day=1)
-        next_date = first_of_month + relativedelta(months=1) - timedelta(days=7)
-        #if (next_date - last_date).days < 27:
-        #    #TODO: if the billing script is ran over a month late, it will need to be ran twice
-        #    #to catch up, replace this with a more robust check later 
-        #    next_date = next_date + relativedelta(months=1)
+        next_date = first_of_month + relativedelta(months=1) - timedelta(days=1)
+        if (next_date - last_date).days < 27:
+            next_date = next_date + relativedelta(months=1)
         return next_date
     else:
         #Weekely
@@ -472,8 +477,8 @@ def run_billing():
             is_successfully_procesed = send_paypal_post_grep(customer)
         else:
             is_successfully_procesed = True
-        #sheet_update_prepaid_credits(name, update_prepaid_credits, current_csv_row)
-        #sheet_update_last_bill_sent(name, updated_last_bill_sent, current_csv_row)
+        sheet_update_prepaid_credits(name, update_prepaid_credits, current_csv_row)
+        sheet_update_last_bill_sent(name, updated_last_bill_sent, current_csv_row)
         if is_successfully_procesed: 
             print(f"{name}:{email}\tSucessfully processed paypal invoice for {name}")
         else:
@@ -575,7 +580,7 @@ def create_manual_billing(customer, messages):
 
 def run_customer_data_over_paypal_api(customer):
     try:
-        paypal_url = 'https://api-m.sandbox.paypal.com'
+        paypal_url = get_pp_url()
         oauth_url = f'{paypal_url}/v1/oauth2/token'
         oauth_response = requests.post(
             oauth_url,
@@ -583,7 +588,7 @@ def run_customer_data_over_paypal_api(customer):
             'Accept': 'application/json',
             'Accept-Language': 'en_US'
             },
-            auth=(CLIENT_ID, SECRET),
+            auth=get_pp_auth(),
             data={'grant_type': 'client_credentials'}
         )
         if DEBUG:
@@ -597,11 +602,11 @@ def run_customer_data_over_paypal_api(customer):
             'Content-Type': 'application/json',
             'Prefer': 'return=representation',
         }
-        invoice_data = pp_form_invoice_string_from_template(customer)
+        invoice_data = pp_form_invoice_json_string(customer)
         if DEBUG:
             print("INVOICE JSON")
             print(invoice_data)
-        draft_response = requests.post('https://api-m.sandbox.paypal.com/v2/invoicing/invoices', headers=invoice_headers, data=invoice_data)
+        draft_response = requests.post(f"{get_pp_url()}/v2/invoicing/invoices", headers=invoice_headers, data=invoice_data)
         if DEBUG:
             print("TESTING DRAFT RESPONSE:")
             print(draft_response)
@@ -613,7 +618,7 @@ def run_customer_data_over_paypal_api(customer):
             'Content-Type': 'application/json',
         }
         data = '{ "send_to_invoicer": true }'
-        send_response = requests.post(f"https://api-m.sandbox.paypal.com/v2/invoicing/invoices/{invoice_id}/send", headers=headers, data=data)
+        send_response = requests.post(f"{get_pp_url()}/v2/invoicing/invoices/{invoice_id}/send", headers=headers, data=data)
         if DEBUG:
             print("TESTING SEND RESPONSE:")
             print(send_response)
@@ -628,36 +633,10 @@ def run_customer_data_over_paypal_api(customer):
 #-------------------------------------------------------------------
 #PAYPAL V2-INVOICE HELPER FUNCTIONS, FORMATS, TEMPLATES, AND EXAMPLES
 #-------------------------------------------------------------------
-INVOICE_TEMPLATE = """
-{{
-  "detail": {{
-    "invoice_number": {invoice_number},
-    "invoice_date": {invoice_date},
-    "currency_code": "USD",
-    "note": {note},
-    "term": {term},
-    "payment_term": {{ 
-        "term_type": "DUE_ON_DATE_SPECIFIED", 
-        "due_date": {due_date} 
-    }}
-  }},
-  "invoicer": {{
-    "email_address": {merchant_email}
-  }},
-  "primary_recipients": [
-    {{
-      "billing_info": {{
-        "email_address": {email}
-      }}
-    }}
-  ],
-  "items": {items_list}
-}}
-"""
-def pp_form_invoice_string_from_template(customer):
+def pp_form_invoice_json_string(customer):
     invoice = {
       "detail": {
-        "invoice_number": generate_short_guid_string(),
+        "invoice_number": get_invoice_number(),
         "invoice_date": round_datetime_to_day(datetime.today()).strftime(INVOICE_DATE_FORMAT),
         "currency_code": "USD",
         "note": pp_note_from_customer_data(customer),
@@ -668,7 +647,7 @@ def pp_form_invoice_string_from_template(customer):
         }
       },
       "invoicer": {
-        "email_address": MERCHANT_EMAIL
+        "email_address": get_merchant_email()
       },
       "primary_recipients": [
         {
@@ -677,7 +656,10 @@ def pp_form_invoice_string_from_template(customer):
           }
         }
       ],
-      "items": pp_item_list_from_customer_data(customer)
+      "items": pp_item_list_from_customer_data(customer),
+      "configuration": {
+        "allow_tip": True
+      }
     }
     return json.dumps(invoice)
 INVOICE_DATE_FORMAT = '%Y-%m-%d'
@@ -1020,5 +1002,43 @@ def generate_short_guid_string():
         result = digits[number % 36] + result
         number //= 36
     return result
+    
+def get_pp_url():
+    if IS_SANDBOX:
+        return 'https://api-m.sandbox.paypal.com'
+    else:
+        return 'https://api-m.paypal.com'
+        
+def get_pp_auth():
+    if IS_SANDBOX:
+        return (SANDBOX_CLIENT_ID, SANDBOX_SECRET)
+    else:
+        return (LIVE_CLIENT_ID, LIVE_SECRET)
+
+def get_merchant_email():
+    if IS_SANDBOX:
+        return SANDBOX_MERCHANT_EMAIL
+    else:
+        return LIVE_MERCHANT_EMAIL
+        
+def get_invoice_number():
+    try:
+        if os.path.exists("invoice_num.txt"):
+            with open('invoice_num.txt', 'r') as file:
+                num_string = file.read()
+            invoice_num = int(num_string[1:])
+            invoice_num += 1
+            invoice_num_string = f"A{invoice_num}"
+            with open('invoice_num.txt', "w") as file:
+                file.write(invoice_num_string)
+            return invoice_num_string
+        else:
+            with open('invoice_num.txt', "w") as file:
+                file.write("A1")
+            return "A1"
+    except:
+        with open('invoice_num.txt', "w") as file:
+            file.write("A1")
+        return "A1"
 
 run_billing()
