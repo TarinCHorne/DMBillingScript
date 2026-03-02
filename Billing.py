@@ -738,17 +738,14 @@ def pp_item_list_from_customer_data(customer):
             gm_name = game_item['GM_Name']
             weekday_played = game_item['Weekday_Played']
             games_played = game_item['Games_Played']
-            quantity = None
-            if running_prepaid_credit == 0:
-                quantity = games_played
-            elif running_prepaid_credit <= games_played:
-                quantity = games_played - running_prepaid_credit
-                running_prepaid_credit = running_prepaid_credit - games_played
-            else:
-                quantity = 0
-                running_prepaid_credit = running_prepaid_credit - games_played
-            if quantity == 0:
-                continue
+            quantity = games_played
+            if running_prepaid_credit != 0:
+                if running_prepaid_credit <= games_played:
+                    quantity = games_played - running_prepaid_credit
+                    running_prepaid_credit = 0
+                else:
+                    quantity = 0
+                    running_prepaid_credit = running_prepaid_credit - games_played
             pp_item = {}
             pp_item['name'] = f"{gm_name} {weekday_played} {game_name}"
             pp_item['description'] = f"{gm_name}'s {weekday_played} game {game_name}, played on days {games_played}"
